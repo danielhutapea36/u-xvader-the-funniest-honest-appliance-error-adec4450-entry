@@ -7,7 +7,9 @@ show, to $MAKEFUN_OUTPUT_DIR/entry.txt (default /output/entry.txt).
 The line is fixed. There is no input, no network, no randomness and no
 clock, so every run writes byte-identical output. Before writing, the
 program checks the gate itself: a single line, 1-200 characters, not
-blank, valid UTF-8.
+blank, valid UTF-8. After writing, it reads the file back and refuses
+success unless the bytes on disk are exactly the intended line, so a
+truncated or garbled write can never pass silently.
 """
 
 import os
@@ -42,8 +44,18 @@ def main() -> int:
     out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "entry.txt")
-    with open(path, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(LINE + "\n")
+    expected = (LINE + "\n").encode("utf-8")
+    with open(path, "wb") as handle:
+        handle.write(expected)
+    with open(path, "rb") as handle:
+        actual = handle.read()
+    if actual != expected:
+        print(
+            "error: written file does not match the intended line "
+            "(%d bytes on disk, %d expected)" % (len(actual), len(expected)),
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
